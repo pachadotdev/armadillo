@@ -146,4 +146,233 @@ chol
 
 
 
+//
+// rank-revealing Cholesky decomposition functions
+//
+
+template<typename T1>
+inline
+typename enable_if2< is_blas_type<typename T1::elem_type>::value, bool >::result
+chol_rank
+  (
+         Mat<typename T1::elem_type>&    out,
+  const Base<typename T1::elem_type,T1>& X,
+         uword&                          rank_out,
+  const char*                            layout = "upper",
+  const typename T1::elem_type           tol = typename T1::elem_type(1e-12)
+  )
+  {
+  arma_debug_sigprint();
+  
+  typedef typename T1::elem_type eT;
+  
+  const char sig = (layout != nullptr) ? layout[0] : char(0);
+  
+  arma_conform_check( ((sig != 'u') && (sig != 'l')), "chol_rank(): layout must be \"upper\" or \"lower\"" );
+  
+  const Mat<eT>& A = X.get_ref();
+  
+  arma_conform_check( (A.is_square() == false), "chol_rank(): given matrix must be square sized" );
+  
+  const uword N = A.n_rows;
+  
+  if(A.is_empty())
+    {
+    out.reset();
+    rank_out = 0;
+    return true;
+    }
+  
+  if((arma_config::check_conform) && (auxlib::rudimentary_sym_check(A) == false))
+    {
+    if(is_cx<eT>::no )  { arma_warn(1, "chol_rank(): given matrix is not symmetric"); }
+    if(is_cx<eT>::yes)  { arma_warn(1, "chol_rank(): given matrix is not hermitian"); }
+    }
+  
+  out.zeros(N, N);
+  rank_out = 0;
+  
+  // Perform rank-revealing Cholesky decomposition
+  for(uword j = 0; j < N; ++j)
+    {
+    // Compute diagonal element
+    eT R_jj = A(j, j);
+    
+    for(uword k = 0; k < j; ++k)
+      {
+      const eT R_jk = (sig == 'u') ? out(k, j) : out(j, k);
+      R_jj -= R_jk * R_jk;
+      }
+    
+    // Check for rank deficiency
+    if(std::abs(R_jj) < tol)
+      {
+      // Column j is linearly dependent, set to zero and continue
+      continue;
+      }
+    
+    R_jj = std::sqrt(R_jj);
+    
+    if(sig == 'u')
+      {
+      out(j, j) = R_jj;
+      
+      // Compute upper triangular elements
+      for(uword col = j + 1; col < N; ++col)
+        {
+        eT R_j_col = A(j, col);
+        
+        for(uword k = 0; k < j; ++k)
+          {
+          R_j_col -= out(k, j) * out(k, col);
+          }
+        
+        out(j, col) = R_j_col / R_jj;
+        }
+      }
+    else
+      {
+      out(j, j) = R_jj;
+      
+      // Compute lower triangular elements  
+      for(uword row = j + 1; row < N; ++row)
+        {
+        eT R_row_j = A(row, j);
+        
+        for(uword k = 0; k < j; ++k)
+          {
+          R_row_j -= out(row, k) * out(j, k);
+          }
+        
+        out(row, j) = R_row_j / R_jj;
+        }
+      }
+    
+    rank_out++;
+    }
+  
+  return true;
+  }
+
+
+
+template<typename T1>
+inline
+typename enable_if2< is_blas_type<typename T1::elem_type>::value, bool >::result
+chol_rank
+  (
+         Mat<typename T1::elem_type>&    out,
+         Col<uword>&                     excluded,
+  const Base<typename T1::elem_type,T1>& X,
+         uword&                          rank_out,
+  const char*                            layout = "upper",
+  const typename T1::elem_type           tol = typename T1::elem_type(1e-12)
+  )
+  {
+  arma_debug_sigprint();
+  
+  typedef typename T1::elem_type eT;
+  
+  const char sig = (layout != nullptr) ? layout[0] : char(0);
+  
+  arma_conform_check( ((sig != 'u') && (sig != 'l')), "chol_rank(): layout must be \"upper\" or \"lower\"" );
+  
+  const Mat<eT>& A = X.get_ref();
+  
+  arma_conform_check( (A.is_square() == false), "chol_rank(): given matrix must be square sized" );
+  
+  const uword N = A.n_rows;
+  
+  if(A.is_empty())
+    {
+    out.reset();
+    excluded.reset();
+    rank_out = 0;
+    return true;
+    }
+  
+  if((arma_config::check_conform) && (auxlib::rudimentary_sym_check(A) == false))
+    {
+    if(is_cx<eT>::no )  { arma_warn(1, "chol_rank(): given matrix is not symmetric"); }
+    if(is_cx<eT>::yes)  { arma_warn(1, "chol_rank(): given matrix is not hermitian"); }
+    }
+  
+  out.zeros(N, N);
+  excluded.zeros(N);
+  rank_out = 0;
+  
+  // Perform rank-revealing Cholesky decomposition
+  for(uword j = 0; j < N; ++j)
+    {
+    // Compute diagonal element
+    eT R_jj = A(j, j);
+    
+    for(uword k = 0; k < j; ++k)
+      {
+      if(excluded(k) == 0)  // Only use non-excluded columns
+        {
+        const eT R_jk = (sig == 'u') ? out(k, j) : out(j, k);
+        R_jj -= R_jk * R_jk;
+        }
+      }
+    
+    // Check for rank deficiency
+    if(std::abs(R_jj) < tol)
+      {
+      // Column j is linearly dependent, mark as excluded
+      excluded(j) = 1;
+      continue;
+      }
+    
+    R_jj = std::sqrt(R_jj);
+    
+    if(sig == 'u')
+      {
+      out(j, j) = R_jj;
+      
+      // Compute upper triangular elements
+      for(uword col = j + 1; col < N; ++col)
+        {
+        eT R_j_col = A(j, col);
+        
+        for(uword k = 0; k < j; ++k)
+          {
+          if(excluded(k) == 0)  // Only use non-excluded columns
+            {
+            R_j_col -= out(k, j) * out(k, col);
+            }
+          }
+        
+        out(j, col) = R_j_col / R_jj;
+        }
+      }
+    else
+      {
+      out(j, j) = R_jj;
+      
+      // Compute lower triangular elements  
+      for(uword row = j + 1; row < N; ++row)
+        {
+        eT R_row_j = A(row, j);
+        
+        for(uword k = 0; k < j; ++k)
+          {
+          if(excluded(k) == 0)  // Only use non-excluded columns
+            {
+            R_row_j -= out(row, k) * out(j, k);
+            }
+          }
+        
+        out(row, j) = R_row_j / R_jj;
+        }
+      }
+    
+    rank_out++;
+    }
+  
+  return true;
+  }
+
+
+
 //! @}
