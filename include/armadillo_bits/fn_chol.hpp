@@ -148,6 +148,9 @@ chol
 
 //
 // rank-revealing Cholesky decomposition functions
+// this is based on
+// Efficient estimation of maximum likelihood models with multiple fixed-effects: the R package FENmlm
+// https://ideas.repec.org/p/luc/wpaper/18-13.html
 //
 
 template<typename T1>
