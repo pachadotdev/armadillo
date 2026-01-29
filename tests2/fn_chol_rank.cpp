@@ -45,19 +45,25 @@ TEST_CASE("chol_rank_basic", "[chol_rank]")
 
     // Test chol_rank() upper
     mat R_rank_upper;
+    uvec excluded_upper;
     uword rank_upper = 0;
-    bool ok_rank_upper = chol_rank(R_rank_upper, X, rank_upper, "upper");
+    bool ok_rank_upper = chol_rank(R_rank_upper, excluded_upper, rank_upper, X, "upper");
     REQUIRE(ok_rank_upper == true);
     REQUIRE(rank_upper == X.n_rows);
     REQUIRE(approx_equal(R1, R_rank_upper, "absdiff", 1e-10));
+    REQUIRE(excluded_upper.n_elem == X.n_rows);
+    REQUIRE(accu(excluded_upper) == 0);
 
     // Test chol_rank() lower
     mat R_rank_lower;
+    uvec excluded_lower;
     uword rank_lower = 0;
-    bool ok_rank_lower = chol_rank(R_rank_lower, X, rank_lower, "lower");
+    bool ok_rank_lower = chol_rank(R_rank_lower, excluded_lower, rank_lower, X, "lower");
     REQUIRE(ok_rank_lower == true);
     REQUIRE(rank_lower == X.n_rows);
     REQUIRE(approx_equal(R2, R_rank_lower, "absdiff", 1e-10));
+    REQUIRE(excluded_lower.n_elem == X.n_rows);
+    REQUIRE(accu(excluded_lower) == 0);
 }
 
 TEST_CASE("chol_rank_edge_cases", "[chol_rank]")
@@ -67,38 +73,53 @@ TEST_CASE("chol_rank_edge_cases", "[chol_rank]")
     X.row(3).zeros();
 
     mat R;
+    uvec excluded;
     uword rank = 0;
-    bool ok = chol_rank(R, X, rank, "upper");
+    bool ok = chol_rank(R, excluded, rank, X, "upper");
     REQUIRE(ok == true);
-    REQUIRE(rank == 3); // Only 3 nonzero rows
-    // R should have zeros in the last row/column
-    REQUIRE(approx_equal(R.row(3), zeros<rowvec>(4), "absdiff", 1e-10));
-    REQUIRE(approx_equal(R.col(3), zeros<vec>(4), "absdiff", 1e-10));
+    REQUIRE(rank == 3); // Only 3 nonzero pivots
+    REQUIRE(excluded.n_elem == 4);
+    REQUIRE(excluded(3) != 0);
+    // Off-diagonals in excluded row/col should be zero and diagonal should be NaN
+    for (uword i = 0; i < 4; ++i) {
+        if (i != 3) {
+            REQUIRE(std::abs(R(3, i)) < 1e-10);
+            REQUIRE(std::abs(R(i, 3)) < 1e-10);
+        }
+    }
+    REQUIRE(std::isnan(R(3,3)));
 
     // Empty matrix
     mat X_empty;
     mat R_empty;
+    uvec excluded_empty;
     uword rank_empty = 42; // should be reset
-    bool ok_empty = chol_rank(R_empty, X_empty, rank_empty, "upper");
+    bool ok_empty = chol_rank(R_empty, excluded_empty, rank_empty, X_empty, "upper");
     REQUIRE(ok_empty == true);
     REQUIRE(rank_empty == 0);
     REQUIRE(R_empty.is_empty());
+    REQUIRE(excluded_empty.is_empty());
 
     // Symmetric but not positive-definite
     mat X_sympd = eye<mat>(3,3);
     X_sympd(2,2) = -1.0; // negative eigenvalue
     mat R_sympd;
+    uvec excluded_sympd;
     uword rank_sympd = 0;
-    bool ok_sympd = chol_rank(R_sympd, X_sympd, rank_sympd, "upper");
+    bool ok_sympd = chol_rank(R_sympd, excluded_sympd, rank_sympd, X_sympd, "upper");
     REQUIRE(ok_sympd == true);
     REQUIRE(rank_sympd == 2); // Only two positive diagonal elements
-    REQUIRE(std::abs(R_sympd(2,2)) < 1e-10); // last diagonal should be zero
+    REQUIRE(excluded_sympd.n_elem == 3);
+    REQUIRE(excluded_sympd(2) != 0);
+    REQUIRE(std::isnan(R_sympd(2,2)));
 
     // Test with lower layout for rank-deficient
     mat R_lower;
+    uvec excluded_lower2;
     uword rank_lower = 0;
-    bool ok_lower = chol_rank(R_lower, X, rank_lower, "lower");
+    bool ok_lower = chol_rank(R_lower, excluded_lower2, rank_lower, X, "lower");
     REQUIRE(ok_lower == true);
     REQUIRE(rank_lower == 3);
-    REQUIRE(approx_equal(R_lower.col(3), zeros<vec>(4), "absdiff", 1e-10));
+    REQUIRE(excluded_lower2(3) != 0);
+    REQUIRE(std::isnan(R_lower(3,3)));
 }
