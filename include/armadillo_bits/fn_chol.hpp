@@ -326,7 +326,7 @@ chol_rank
             {
             // BlockUpdate size (N-p) x (end-p+1).
             // Col index in BlockUpdate corresponds to j.
-            // Row index in BlockUpdate corresponds to global rows p..N-1.
+            // Row index in BlockUpdate corresponds to global rows p...N-1.
             // We need rows corresponding to trailing_start..N-1.
             // trailing offset: trailing_start - p.
             
@@ -336,7 +336,7 @@ chol_rank
               {
               // Intra-panel: sum_{k=p}^{j-1} out(j, k) * out(trailing, k)
               // Matrix (size trailing_len x j-p) * Vector (size j-p)
-              // out(trailing, p..j-1) * out(j, p..j-1).t()
+              // out(trailing, p...j-1) * out(j, p...j-1).t()
               tmp -= out.submat(trailing_start, p, N - 1, j - 1) * out.row(j).cols(p, j - 1).t();
               }
             
